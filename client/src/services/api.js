@@ -1,6 +1,6 @@
 import axios from "axios";
 
-// For Vercel deployment - use environment variable for API base URL
+// Production API URL for Render backend
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -9,7 +9,7 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 60000, // 60 seconds timeout for Render (can be slower)
+  timeout: 60000, // 60 seconds for Render (can be slow on free tier)
 });
 
 // Request interceptor for error handling
