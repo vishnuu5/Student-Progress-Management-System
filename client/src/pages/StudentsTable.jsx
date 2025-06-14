@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Download, Edit, Trash2, Eye, Search, Mail, MailX, Loader2 } from "lucide-react"
+import { Plus, Download, Edit, Trash2, Eye, Search, Mail, MailX } from "lucide-react"
 import toast from "react-hot-toast"
 import StudentModal from "../components/StudentModal"
 import ConfirmDialog from "../components/ConfirmDialog"
+import LoadingSpinner from "../components/LoadingSpinner"
 import { studentsApi } from "../services/api"
 
 const StudentsTable = () => {
@@ -27,7 +28,11 @@ const StudentsTable = () => {
             const data = await studentsApi.getAll()
             setStudents(data)
         } catch (error) {
-            toast.error("Failed to fetch students")
+            if (error.code === "ECONNABORTED") {
+                toast.error("Request timeout - Backend might be starting up. Please try again.")
+            } else {
+                toast.error("Failed to fetch students")
+            }
             console.error("Error fetching students:", error)
         } finally {
             setLoading(false)
@@ -88,6 +93,8 @@ const StudentsTable = () => {
                 } else {
                     toast.error("Invalid data provided. Please check all fields.")
                 }
+            } else if (error.code === "ECONNABORTED") {
+                toast.error("Request timeout - Please try again")
             } else {
                 toast.error(editingStudent ? "Failed to update student" : "Failed to add student")
             }
@@ -96,7 +103,14 @@ const StudentsTable = () => {
 
     const handleDownloadCSV = async () => {
         try {
-            const response = await fetch("/api/students/export/csv")
+            // Use the API base URL for CSV download
+            const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+            const response = await fetch(`${apiUrl}/students/export/csv`)
+
+            if (!response.ok) {
+                throw new Error("Failed to download CSV")
+            }
+
             const blob = await response.blob()
             const url = window.URL.createObjectURL(blob)
             const a = document.createElement("a")
@@ -131,11 +145,7 @@ const StudentsTable = () => {
     }
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        )
+        return <LoadingSpinner message="Loading students..." />
     }
 
     return (

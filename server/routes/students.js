@@ -1,15 +1,54 @@
 const express = require("express");
 const router = express.Router();
-const Student = require("../models/Student");
-const Contest = require("../models/Contest");
-const Submission = require("../models/Submission");
-const { Parser } = require("json2csv");
-const { syncStudentData } = require("../services/codeforcesService");
+
+// For CSV export, we'll use a simple manual approach first
+const createCSV = (data) => {
+  const headers = [
+    "name",
+    "email",
+    "phoneNumber",
+    "codeforcesHandle",
+    "currentRating",
+    "maxRating",
+    "lastDataUpdate",
+  ];
+  const csvContent = [
+    headers.join(","),
+    ...data.map((row) =>
+      headers
+        .map((header) => {
+          const value = row[header];
+          // Handle dates and escape commas
+          if (value instanceof Date) {
+            return `"${value.toISOString()}"`;
+          }
+          return `"${String(value || "").replace(/"/g, '""')}"`;
+        })
+        .join(",")
+    ),
+  ].join("\n");
+  return csvContent;
+};
+
+// Temporary in-memory storage for testing
+const students = [
+  {
+    _id: "1",
+    name: "Test Student",
+    email: "test@example.com",
+    phoneNumber: "1234567890",
+    codeforcesHandle: "testuser",
+    currentRating: 1200,
+    maxRating: 1300,
+    lastDataUpdate: new Date(),
+    emailRemindersCount: 0,
+    emailRemindersEnabled: true,
+  },
+];
 
 // Get all students
-router.get("/", async (req, res) => {
+router.get("/", (req, res) => {
   try {
-    const students = await Student.find().sort({ createdAt: -1 });
     res.json(students);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -17,9 +56,9 @@ router.get("/", async (req, res) => {
 });
 
 // Get student by ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", (req, res) => {
   try {
-    const student = await Student.findById(req.params.id);
+    const student = students.find((s) => s._id === req.params.id);
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
@@ -30,100 +69,105 @@ router.get("/:id", async (req, res) => {
 });
 
 // Create new student
-router.post("/", async (req, res) => {
+router.post("/", (req, res) => {
   try {
-    const student = new Student(req.body);
-    const savedStudent = await student.save();
+    const newStudent = {
+      _id: Date.now().toString(),
+      ...req.body,
+      currentRating: 0,
+      maxRating: 0,
+      lastDataUpdate: new Date(),
+      emailRemindersCount: 0,
+      emailRemindersEnabled: true,
+    };
 
-    // Sync Codeforces data for new student
-    try {
-      await syncStudentData(savedStudent._id);
-    } catch (syncError) {
-      console.error("Error syncing new student data:", syncError);
+    // Check for duplicate email
+    if (students.find((s) => s.email === newStudent.email)) {
+      return res
+        .status(400)
+        .json({ message: "A student with this email already exists" });
     }
 
-    res.status(201).json(savedStudent);
+    // Check for duplicate codeforces handle
+    if (
+      students.find((s) => s.codeforcesHandle === newStudent.codeforcesHandle)
+    ) {
+      return res
+        .status(400)
+        .json({
+          message: "A student with this Codeforces handle already exists",
+        });
+    }
+
+    students.push(newStudent);
+    res.status(201).json(newStudent);
   } catch (error) {
-    console.error("Error creating student:", error);
-
-    if (error.code === 11000) {
-      // Duplicate key error
-      const field = Object.keys(error.keyPattern)[0];
-      const message = `A student with this ${field} already exists`;
-      return res.status(400).json({ message });
-    }
-
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({ message: messages.join(", ") });
-    }
-
     res.status(400).json({ message: error.message });
   }
 });
 
 // Update student
-router.put("/:id", async (req, res) => {
+router.put("/:id", (req, res) => {
   try {
-    const oldStudent = await Student.findById(req.params.id);
-    const updatedStudent = await Student.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedStudent) {
+    const index = students.findIndex((s) => s._id === req.params.id);
+    if (index === -1) {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    // If Codeforces handle changed, sync data immediately
-    if (oldStudent.codeforcesHandle !== updatedStudent.codeforcesHandle) {
-      try {
-        await syncStudentData(updatedStudent._id);
-      } catch (syncError) {
-        console.error("Error syncing updated student data:", syncError);
-      }
+    // Check for duplicate email (excluding current student)
+    if (
+      req.body.email &&
+      students.find(
+        (s) => s.email === req.body.email && s._id !== req.params.id
+      )
+    ) {
+      return res
+        .status(400)
+        .json({ message: "A student with this email already exists" });
     }
 
-    res.json(updatedStudent);
+    // Check for duplicate codeforces handle (excluding current student)
+    if (
+      req.body.codeforcesHandle &&
+      students.find(
+        (s) =>
+          s.codeforcesHandle === req.body.codeforcesHandle &&
+          s._id !== req.params.id
+      )
+    ) {
+      return res
+        .status(400)
+        .json({
+          message: "A student with this Codeforces handle already exists",
+        });
+    }
+
+    students[index] = { ...students[index], ...req.body };
+    res.json(students[index]);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 });
 
 // Delete student
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", (req, res) => {
   try {
-    const student = await Student.findByIdAndDelete(req.params.id);
-    if (!student) {
+    const index = students.findIndex((s) => s._id === req.params.id);
+    if (index === -1) {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    // Delete associated contests and submissions
-    await Contest.deleteMany({ studentId: req.params.id });
-    await Submission.deleteMany({ studentId: req.params.id });
-
+    students.splice(index, 1);
     res.json({ message: "Student deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// Download students as CSV
-router.get("/export/csv", async (req, res) => {
+// Export CSV
+router.get("/export/csv", (req, res) => {
   try {
-    const students = await Student.find();
-    const fields = [
-      "name",
-      "email",
-      "phoneNumber",
-      "codeforcesHandle",
-      "currentRating",
-      "maxRating",
-      "lastDataUpdate",
-    ];
-    const json2csvParser = new Parser({ fields });
-    const csv = json2csvParser.parse(students);
+    const csv = createCSV(students);
 
     res.header("Content-Type", "text/csv");
     res.attachment("students.csv");
