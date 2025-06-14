@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const cron = require("node-cron");
+const path = require("path");
 require("dotenv").config();
 
 const studentRoutes = require("./routes/students");
@@ -18,16 +19,12 @@ app.use(cors());
 app.use(express.json());
 
 // Connect to MongoDB
-mongoose.connect(
-  process.env.MONGODB_URI || "mongodb://localhost:27017/student-progress",
-  {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  }
-);
-
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 const db = mongoose.connection;
-db.on("error", console.error.bind(console, "connection error:"));
+db.on("error", console.error.bind(console, "MongoDB connection error:"));
 db.once("open", () => {
   console.log("Connected to MongoDB");
 });
@@ -37,7 +34,7 @@ app.use("/api/students", studentRoutes);
 app.use("/api/codeforces", codeforcesRoutes);
 app.use("/api/settings", settingsRoutes);
 
-// Default cron job - runs daily at 2 AM
+// Cron job - daily at 2 AM
 const cronJob = cron.schedule(
   "0 2 * * *",
   async () => {
@@ -50,15 +47,22 @@ const cronJob = cron.schedule(
       console.error("Error in daily sync:", error);
     }
   },
-  {
-    scheduled: false,
-  }
+  { scheduled: false }
 );
 
-// Start the cron job
 cronJob.start();
 
-// Health check endpoint
+// Serve frontend in production
+if (process.env.NODE_ENV === "production") {
+  const __dirname = path.resolve(); // Needed if using ES5-style modules
+  app.use(express.static(path.join(__dirname, "client", "dist")));
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
+  });
+}
+
+// Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
