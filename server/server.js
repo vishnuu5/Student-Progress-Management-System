@@ -15,7 +15,6 @@ app.use(
       NODE_ENV === "production"
         ? [
             process.env.FRONTEND_URL,
-            "https://your-vercel-app.vercel.app", // Replace with your actual Vercel URL
             ...(process.env.ALLOWED_ORIGINS?.split(",") || []),
           ].filter(Boolean)
         : ["http://localhost:3000", "http://127.0.0.1:3000"],
