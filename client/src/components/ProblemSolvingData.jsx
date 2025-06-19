@@ -1,4 +1,3 @@
-"use client"
 
 import { useState, useEffect } from "react"
 import { Target, Calendar, BarChart3, Activity } from "lucide-react"
