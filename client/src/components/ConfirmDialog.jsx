@@ -1,4 +1,4 @@
-"use client"
+
 import { AlertTriangle } from "lucide-react"
 
 const ConfirmDialog = ({ title, message, onConfirm, onCancel }) => {
