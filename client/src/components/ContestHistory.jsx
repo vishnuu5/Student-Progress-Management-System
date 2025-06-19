@@ -1,4 +1,3 @@
-"use client"
 
 import { useState, useEffect } from "react"
 import { Calendar, Trophy, TrendingUp, TrendingDown } from "lucide-react"
