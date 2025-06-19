@@ -1,4 +1,4 @@
-"use client"
+
 import { Link, useLocation } from "react-router-dom"
 import { useTheme } from "../contexts/ThemeContext"
 import { Moon, Sun, Users, Settings, Code } from "lucide-react"
